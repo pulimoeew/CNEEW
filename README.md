@@ -1,8 +1,9 @@
-# SCEEW
+# CNEEW
+原作：[TenkyuChimata/SCEEW](https://github.com/TenkyuChimata/SCEEW)
 
-基于 Python / Qt6 的轻量级中国四川地震预警软件
+基于 Python / Qt6 的轻量级中国地震预警软件
 
-预警数据来源: 四川省地震局
+预警数据来源: 中国地震局
 
 API: <https://api.wolfx.jp>
 
@@ -10,23 +11,19 @@ API: <https://api.wolfx.jp>
 
 ## 使用
 
-SCEEW 跨平台可用, 我们同时提供 Nuitka 封装版
-
-如果需要手动安装运行, 请按照以下流程进行安装
-
-首先请确保拥有 Python3 环境, 推荐使用 3.13 及以上版本
-
-然后 clone 本仓库并执行以下命令安装 SCEEW 的依赖库
+CNEEW全平台可用, 为方便Windows用户, 我们已提供exe封装版
+如果要在Windows以外的平台中使用, 请按照以下流程进行安装
+首先请确保拥有Python3环境, 推荐使用3.10及以上版本
+然后克隆本仓库并执行以下命令安装SCEEW的依赖库
 
 `pip install -r requirements.txt`
 
-最后执行`python SCEEW.py`即可启动 SCEEW
+最后执行`python CNEEW.py`即可启动CNEEW
 
 ## 封装版下载
 
-- [GitHub Releases](https://github.com/TenkyuChimata/SCEEW/releases/latest)
-- [蓝奏云(密码 c4jt)](https://akarin.lanzoul.com/b00rbwxgf)
+- [GitHub Releases](https://github.com/TenkyuChimata/CNEEW/releases/latest)
 
-## 截图
+## 截图(懒得改了)
 
 ![1.png](https://s2.loli.net/2025/12/24/RrBW3wsEnJGbLdU.png)
