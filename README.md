@@ -5,7 +5,7 @@
 
 预警数据来源: 中国地震局
 
-API: <[FAN Studio](https://api.fanstudio.tech/>
+API: [FAN Studio](https://api.fanstudio.tech/)
 
 **本软件基于 GPL-3.0 协议开源**
 
