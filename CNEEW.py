@@ -85,49 +85,55 @@ def error_report():
 
 
 def _parse_version_from_txt(txt: str) -> str | None:
-    # 支持：version=1.2.3（允许前后有其它字段）
+    # 支持：version=1.3.0（允许前后有其它字段）
     m = re.search(r"version\s*=\s*([0-9]+(?:\.[0-9]+)*)", txt)
     return m.group(1) if m else None
 
 
 def _semver_tuple(v: str):
-    # "1.2.3" -> (1,2,3)；多段也行，缺段按 0 补
+    # "1.3.0" -> (1,3,0)；多段也行，缺段按 0 补
     v = re.sub(r"[^0-9.]", "", (v or "").strip())
     if not v:
         return (0, 0, 0)
     return tuple(int(x) if x else 0 for x in v.split("."))
 
 
-def _fetch_version_from_dns_txt(domain: str, timeout: float = 5.0) -> str:
+import urllib.request
+import urllib.error
+
+def _fetch_version_from_json(url: str, timeout: float = 5.0) -> str:
     """
-    从 DNS TXT 记录中提取 version=x.x.x 的版本号并返回。
+    获取最新版本
     """
-    resolver = dns.resolver.Resolver(configure=True)
-    resolver.lifetime = timeout  # 总超时
-    resolver.timeout = timeout  # 单次超时
-
-    answers = resolver.resolve(domain, "TXT")
-
-    # 一个域名可能有多条 TXT，逐条找包含 version= 的
-    for rdata in answers:
-        # dnspython 返回的 TXT 可能是多段 string 切片，拼起来
-        parts = []
-        for s in getattr(rdata, "strings", []):
-            parts.append(s.decode("utf-8", errors="ignore"))
-        txt = "".join(parts).strip()
-
-        v = _parse_version_from_txt(txt)
-        if v:
-            return v
-
-    raise ValueError(f"TXT record for {domain} does not contain version=...")
+    try:
+        req = urllib.request.Request(url, headers={"User-Agent": "CNEEW/1.0"})
+        with urllib.request.urlopen(req, timeout=timeout) as response:
+            data = response.read().decode("utf-8")
+            json_data = json.loads(data)
+            if json_data.get("status") == "ok" and "version" in json_data:
+                return json_data["version"]
+            raise ValueError("Invalid JSON response format")
+    except urllib.error.HTTPError as e:
+        raise ValueError(f"HTTP error: {e.code}")
+    except urllib.error.URLError as e:
+        raise ValueError(f"URL error: {str(e)}")
+    except json.JSONDecodeError:
+        raise ValueError("Invalid JSON")
 
 
 def get_update(window):
     try:
-        latest_version = _fetch_version_from_dns_txt("sceew.mtf.edu.kg", timeout=5.0)
+        version_url = "https://raw.githubusercontent.com/pulimoeew/CNEEW/refs/heads/main/version.json"
+        latest_version = _fetch_version_from_json(version_url, timeout=5.0)
+        
+        current = _semver_tuple(version)
+        latest = _semver_tuple(latest_version)
+        
+        print(f"当前版本: {version} -> {current}")
+        print(f"最新版本: {latest_version} -> {latest}")
+        print(f"需要更新: {latest > current}")
 
-        if _semver_tuple(latest_version) > _semver_tuple(version):
+        if latest > current:
             reply = QMessageBox.question(
                 window,
                 f"中国地震预警(CNEEW) v{version}",
@@ -136,7 +142,8 @@ def get_update(window):
             if reply == QMessageBox.StandardButton.Yes:
                 webbrowser.open("https://github.com/pulimoeew/CNEEW/releases")
 
-    except Exception:
+    except Exception as e:
+        print(f"更新检查失败: {str(e)}")
         error_report()
 
 
@@ -192,8 +199,6 @@ def save_settings() -> None:
             with open("config.json", "w", encoding="utf-8") as f:
                 json.dump(config_data, f, ensure_ascii=False)
             config_updated = True
-            if websocket:
-                asyncio.run(websocket.send("query_cenceew"))
             (
                 location_value,
                 latitude_value,
@@ -253,7 +258,7 @@ def create_general_tab() -> QWidget:
     try:
         config = get_config()
         if not config:
-            # 占位内容：配置不可用，但仍返回 QWidget
+            # 配置不可用，但仍返回 QWidget
             msg = QLabel("配置加载失败：请检查配置文件是否存在/格式是否正确。")
             msg.setStyleSheet("color: white;")
             msg.setWordWrap(True)
@@ -307,7 +312,7 @@ def create_general_tab() -> QWidget:
         longitude_input.setStyleSheet("background-color: #9d9d9d; color: white;")
         longitude_input.setFixedWidth(150)
 
-        # 现在这些变量都已经创建好了，再 connect（避免原来“引用未定义变量”的风险）
+        # 现在这些变量都已经创建好了，再 connect
         notification_checkbox.stateChanged.connect(
             lambda: settings_update(
                 location_input,
@@ -404,7 +409,7 @@ def create_general_tab() -> QWidget:
 
     except Exception:
         error_report()
-        # 兜底：同样返回占位 Tab，而不是 None
+        # 同样返回占位 Tab，而不是 None
         msg = QLabel("发生异常：请查看日志/错误报告。")
         msg.setStyleSheet("color: white;")
         msg.setWordWrap(True)
@@ -427,7 +432,7 @@ def create_about_tab() -> QWidget:
             f"开发者: pulimo999\n"
             f"复刻自: TenkyuChimata/SCEEW\n"
             f"预警数据来源: 中国地震局\n"
-            f"API: https://api.wolfx.jp\n"
+            f"API: https://api.fanstudio.tech\n"
             f"本软件基于 GPL-3.0 协议开源\n"
             f"Github: https://github.com/pulimoeew/CNEEW"
         )
@@ -446,7 +451,7 @@ def create_about_tab() -> QWidget:
     except Exception:
         error_report()
 
-        # 兜底：不要返回 None，返回一个带错误提示的 QWidget
+        # 不要返回 None，返回一个带错误提示的 QWidget
         fail = QLabel("关于页面加载失败，请查看错误报告/日志。")
         fail.setStyleSheet("color: white;")
         set_font(fail, 12)
@@ -521,29 +526,52 @@ def open_settings_window():
 
 
 def custom_close_event(event):
-    window.hide()  # 隐藏窗口，而不是退出程序
-    event.ignore()  # 忽略关闭事件，从而避免程序退出
+    window.hide()  # 隐藏窗口
+    event.ignore()  # 忽略关闭事件，避免程序退出
 
 
-def alert(alert_type, level):
+import threading
+
+audio_lock = threading.Lock()
+mixer_initialized = False
+
+def init_mixer():
+    global mixer_initialized
     try:
-        if audio_bool:
+        if not mixer_initialized:
             mixer.init()
-            if alert_type == "EEW":
-                mixer.music.load(f".//assets//sounds//EEW{level}.wav")
-                mixer.music.play()
-                while mixer.music.get_busy():
-                    time.sleep(0.1)
-            else:
-                mixer.music.load(".//assets//sounds//countdown.wav")
-                for _ in range(15):
-                    mixer.music.play()
-                    while mixer.music.get_busy():
-                        time.sleep(0.01)
-            mixer.quit()
+            mixer_initialized = True
+        return True
     except:
         error_report()
-        mixer.quit()
+        return False
+
+def alert(alert_type, level):
+    if not audio_bool:
+        return
+    with audio_lock:
+        if not init_mixer():
+            return
+        try:
+            if alert_type == "EEW":
+                mixer.music.load(f".//assets//sounds//EEW{level}.wav")
+            elif alert_type == "countdown":
+                mixer.music.load(".//assets//sounds//countdown.wav")
+            elif alert_type == "number":
+                mixer.music.load(f".//assets//sounds//{level}.mp3")
+            elif alert_type == "arrive":
+                mixer.music.load(".//assets//sounds//arrive.mp3")
+            mixer.music.play()
+            while mixer.music.get_busy():
+                time.sleep(0.05)
+        except:
+            error_report()
+            try:
+                global mixer_initialized
+                mixer.quit()
+                mixer_initialized = False
+            except:
+                pass
 
 
 def distance(lat1, lon1, lat2, lon2):
@@ -564,30 +592,49 @@ def distance(lat1, lon1, lat2, lon2):
 
 def countdown(user_location, distance, ctime):
     try:
-        cycle = True
         Stime = distance / 4
         quaketime = parse_bjt(ctime)
         Sarrivetime = quaketime + timedelta(seconds=Stime)
-        while cycle:
-            s_countdown = int((Sarrivetime - get_bjt()).total_seconds())
-            if s_countdown <= 0 or s_countdown >= 1200:
+        played_numbers = set()
+        arrived = False
+        post_arrive_counter = 0
+        max_post_arrive = 10
+        while True:
+            try:
+                s_countdown = int((Sarrivetime - get_bjt()).total_seconds())
+            except:
                 s_countdown = 0
-                cycle = False
-            if s_countdown:
+            if s_countdown >= 1200:
+                subcdinfo_text.setText(f"地震横波已抵达{user_location}")
+                break
+            if s_countdown > 0:
                 subcdinfo_text.setText(
                     f"地震横波还有 {s_countdown} 秒抵达{user_location}"
                 )
+                if 1 <= s_countdown <= 10 and s_countdown not in played_numbers:
+                    try:
+                        Thread(target=alert, args=("number", s_countdown)).start()
+                        played_numbers.add(s_countdown)
+                    except:
+                        error_report()
             else:
-                subcdinfo_text.setText(f"地震横波已抵达{user_location}")
-            if s_countdown == 9:
-                thread5 = Thread(
-                    target=alert,
-                    args=(
-                        "countdown",
-                        0,
-                    ),
-                )
-                thread5.start()
+                if not arrived:
+                    subcdinfo_text.setText(f"地震横波已抵达{user_location}")
+                    try:
+                        Thread(target=alert, args=("arrive", 0)).start()
+                    except:
+                        error_report()
+                    arrived = True
+                    post_arrive_counter = 1
+                else:
+                    if post_arrive_counter < max_post_arrive:
+                        try:
+                            Thread(target=alert, args=("countdown", 0)).start()
+                        except:
+                            error_report()
+                        post_arrive_counter += 1
+                    else:
+                        break
             time.sleep(1)
     except:
         error_report()
@@ -608,11 +655,11 @@ def timer():
 async def cneew(window):
     eqtime = None
     is_eew = False
+    last_eew_eqtime = None
     global audio_bool, config_updated, websocket
     while True:
         try:
-            async with websockets.connect("wss://ws-api.wolfx.jp/cenc_eew") as websocket:
-                await websocket.send("query_cenceew")
+            async with websockets.connect("wss://ws.fanstudio.tech/cea-pr") as websocket:
                 while True:
                     cenceew_json = json.loads(await websocket.recv())
                     if cenceew_json["type"] != "heartbeat":
@@ -622,17 +669,17 @@ async def cneew(window):
                             continue
                         audio_bool = config["audio"]
                         user_location = config["location"]
-                        eqtime = cenceew_json["OriginTime"]
-                        location = cenceew_json["HypoCenter"]
-                        magnitude = cenceew_json["Magnitude"]
+                        eqtime = cenceew_json["Data"]["shockTime"]
+                        location = cenceew_json["Data"]["placeName"]
+                        magnitude = cenceew_json["Data"]["magnitude"]
                         eqdistance = distance(
-                            cenceew_json["Latitude"],
-                            cenceew_json["Longitude"],
+                            cenceew_json["Data"]["latitude"],
+                            cenceew_json["Data"]["longitude"],
                             config["latitude"],
                             config["longitude"],
                         )
-                        maxshindo = cenceew_json["MaxIntensity"]
-                        reportnum = cenceew_json["ReportNum"]
+                        maxshindo = cenceew_json["Data"]["epiIntensity"]
+                        reportnum = cenceew_json["Data"]["updates"]
                         cnshindo = max(
                             1.92 + 1.63 * magnitude - 3.49 * math.log(eqdistance, 10),
                             0.0,
@@ -674,9 +721,10 @@ async def cneew(window):
                                 lvl = 2
                             else:
                                 lvl = 0
-                            Thread(target=alert, args=("EEW", lvl)).start()
                             if not is_eew:
+                                Thread(target=alert, args=("EEW", lvl)).start()
                                 is_eew = True
+                                last_eew_eqtime = eqtime
                                 thread3 = Thread(
                                     target=countdown,
                                     args=(
@@ -686,14 +734,20 @@ async def cneew(window):
                                     ),
                                 )
                                 thread3.start()
+                            elif eqtime != last_eew_eqtime:
+                                Thread(target=alert, args=("EEW", lvl)).start()
+                                last_eew_eqtime = eqtime
                             if config.get("notification", False) and notify is not None:
-                                title = f"中国地震预警（第{reportnum}报）"
-                                notify(
-                                    title=title,
-                                    message=message,
-                                    app_name=f"中国地震预警(CNEEW) v{version}",
-                                    app_icon="./assets/images/icon.ico",
-                                )
+                                try:
+                                    title = f"中国地震预警（第{reportnum}报）"
+                                    notify(
+                                        title=title,
+                                        message=message,
+                                        app_name=f"中国地震预警(CNEEW) v{version}",
+                                        app_icon="./assets/images/icon.ico",
+                                    )
+                                except:
+                                    pass
                         else:
                             subcdinfo_text.setText(f"地震横波已抵达{user_location}")
                         config_updated = False
@@ -712,12 +766,11 @@ async def cneew(window):
 
 if __name__ == "__main__":
 
-    version = "1.2.3"
+    version = "1.3.0"
     websocket = None
     audio_bool = True
     config_updated = True
-    version_url = "https://pulimoeew.github.io/CNEEW/version.json"
-
+    
     try:
         app = QApplication([])
 
