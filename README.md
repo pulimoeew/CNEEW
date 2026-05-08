@@ -5,7 +5,7 @@
 
 预警数据来源: 中国地震局
 
-API: <https://api.wolfx.jp>
+API: <[FAN Studio](https://api.fanstudio.tech/>
 
 **本软件基于 GPL-3.0 协议开源**
 
@@ -22,7 +22,7 @@ CNEEW全平台可用, 为方便Windows用户, 我们已提供exe封装版
 
 ## 封装版下载
 
-- [GitHub Releases](https://github.com/TenkyuChimata/CNEEW/releases/latest)
+- [GitHub Releases](https://github.com/pulimoeew/CNEEW/releases/latest)
 
 ## 截图(懒得改了)
 
